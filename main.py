@@ -56,7 +56,13 @@ with open('sales.csv', mode='r', newline='', encoding='utf-8') as file:
             skipped_count += 1
             continue
 
-        quantity = int(quantity_str)
+        try:
+            quantity = int(quantity_str)
+        except ValueError:
+            handle_bad_data(transaction_id, f"non-numeric quantity ({quantity_str})")
+            skipped_count += 1
+            continue
+        
         if quantity < 0:
             handle_bad_data(transaction_id, f"negative quantity ({quantity})")
             skipped_count += 1
