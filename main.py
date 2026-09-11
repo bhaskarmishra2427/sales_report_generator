@@ -18,9 +18,12 @@ logging.basicConfig(filename="errors.log",
                 format='%(message)s',
                 filemode='w')
 
-# handle_bad_data (input: transaction_id, reason)
-def handle_bad_data(transaction_id: str, reason: str):
-    logging.info(f"SKIPPED [transaction_id={transaction_id}] reason={reason}")
+# handle_bad_data (input: transaction_id, reasons)
+# One log line per skipped row, however many problems that row has, so the
+# number of SKIPPED lines still matches skipped_count.
+def handle_bad_data(transaction_id: str, reasons: list[str]):
+    logging.info(f"SKIPPED [transaction_id={transaction_id}] "
+                 f"count={len(reasons)} reasons={'; '.join(reasons)}")
 
 with open('sales.csv', mode='r', newline='', encoding='utf-8') as file:
     
@@ -34,6 +37,9 @@ with open('sales.csv', mode='r', newline='', encoding='utf-8') as file:
     header = next(csv_reader)
     
     for row in csv_reader:
+        #task 1
+        row_count += 1
+
         #separate the values
         transaction_id = row[0]
         date = row[1]
@@ -42,36 +48,43 @@ with open('sales.csv', mode='r', newline='', encoding='utf-8') as file:
         quantity_str = row[4]
         unit_price_str = row[5]
 
-        #task 1
-        row_count += 1
-
         #task 4 (checked on the raw strings, before conversion)
+        # Every check records its complaint instead of skipping straight away,
+        # so a single row can report several problems at once.
+        reasons = []
+
         if product == "":
-            handle_bad_data(transaction_id, "missing product name")
-            skipped_count += 1
-            continue
+            reasons.append("missing product name")
 
+        # quantity: each step only runs if the one before it produced a usable
+        # value, so we never report a follow-on error we cannot judge.
+        quantity = None
         if quantity_str == "":
-            handle_bad_data(transaction_id, "missing quantity")
-            skipped_count += 1
-            continue
+            reasons.append("missing quantity")
+        else:
+            try:
+                quantity = int(quantity_str)
+            except ValueError:
+                reasons.append(f"missing quantity ({quantity_str})")
+            else:
+                if quantity < 0:
+                    reasons.append(f"negative quantity ({quantity})")
+                    quantity = None
 
-        try:
-            quantity = int(quantity_str)
-        except ValueError:
-            handle_bad_data(transaction_id, f"non-numeric quantity ({quantity_str})")
-            skipped_count += 1
-            continue
-        
-        if quantity < 0:
-            handle_bad_data(transaction_id, f"negative quantity ({quantity})")
-            skipped_count += 1
-            continue
+        # unit_price is validated independently of quantity, so a row that is
+        # wrong in both places reports both.
+        unit_price = None
+        if unit_price_str == "":
+            reasons.append("missing unit_price")
+        else:
+            try:
+                unit_price = float(unit_price_str)
+            except ValueError:
+                reasons.append(f"non-numeric unit_price ({unit_price_str})")
 
-        try:
-            unit_price = float(unit_price_str)
-        except ValueError:
-            handle_bad_data(transaction_id, f"non-numeric unit_price ({unit_price_str})")
+        # A row is skipped once, no matter how many ways it is broken.
+        if reasons:
+            handle_bad_data(transaction_id, reasons)
             skipped_count += 1
             continue
 
